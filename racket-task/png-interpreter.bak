@@ -1,0 +1,103 @@
+#lang racket
+
+(require 2htdp/image
+         2htdp/universe
+         racket/string
+         simple-qr)  ; Import the simple-qr package
+
+; Define the state structure
+(struct state (stack commands image))
+
+; Initial state
+(define initial-state
+  (state '() '() (empty-scene 500 500)))
+
+; Push operation to stack
+(define (push s x)
+  (state (cons x (state-stack s)) (state-commands s) (state-image s)))
+
+; Pop operation from stack
+(define (pop s)
+  (if (empty? (state-stack s))
+      (error "Stack underflow")
+      (state (cdr (state-stack s)) (state-commands s) (state-image s))))
+
+; Peek the top of the stack
+(define (top s)
+  (if (empty? (state-stack s))
+      (error "Stack underflow")
+      (car (state-stack s))))
+
+; Interpret commands
+(define (interpret-command cmd s)
+  (match cmd
+    [(? number?)  ; Push numbers onto the stack
+     (push s cmd)]
+    [(? string?)  ; Push strings onto the stack
+     (push s cmd)]
+    ['draw-rect
+     (let* ([h (top s)]
+            [s1 (pop s)]
+            [w (top s1)]
+            [s2 (pop s1)]
+            [y (top s2)]
+            [s3 (pop s2)]
+            [x (top s3)]
+            [s4 (pop s3)])
+       (state (state-stack s4)
+              (state-commands s4)
+              (place-image (rectangle w h 'solid 'black)
+                           x y (state-image s4))))]    
+    ['draw-text
+     (let* ([size (top s)]
+            [s1 (pop s)]
+            [text (top s1)]
+            [s2 (pop s1)]
+            [y (top s2)]
+            [s3 (pop s2)]
+            [x (top s3)]
+            [s4 (pop s3)])
+       (state (state-stack s4)
+              (state-commands s4)
+              (place-image (text text size 'black)
+                           x y (state-image s4))))]    
+    ['qr-code
+     (let* ([data (top s)]
+            [s1 (pop s)])
+       (qr-write data "output-qr.png"
+                 #:module_width 5
+                 #:color '("black" . "white")
+                 #:output_type 'png)
+       s1)]))
+
+; Run the commands
+(define (run-commands commands)
+  (define (loop cmds state)
+    (if (null? cmds)
+        state
+        (loop (cdr cmds) (interpret-command (car cmds) state))))
+  (loop commands initial-state))
+
+; Generate commands for drawing shapes and text
+(define (generate-commands-rect)
+  (list 50 50 100 100 'draw-rect))  ; Draw a rectangle
+
+(define (generate-commands-text)
+  (list 20 20 30 "Hello World" 'draw-text))  ; Draw text
+
+(define (generate-commands-qr)
+  (list "https://example.com" 'qr-code))  ; Generate QR code
+
+; Main function to generate images for each type of command
+(define (main)
+  (define (generate-image filename commands)
+    (define final-state (run-commands commands))
+    (save-image (state-image final-state) filename))
+
+  ; Generate images
+  (generate-image "rect.png" (generate-commands-rect))
+  (generate-image "text.png" (generate-commands-text))
+  (generate-image "qr.png" (generate-commands-qr)))
+
+; Run the main function
+(main)

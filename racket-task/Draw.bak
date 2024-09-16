@@ -1,0 +1,62 @@
+#lang racket
+
+(require 2htdp/image
+         2htdp/universe)
+
+; Definicija stanja
+(struct state (stack image))
+
+; Inicijalno stanje
+(define initial-state
+  (state '() (empty-scene 500 500)))
+
+; Dodavanje operacije na stack
+(define (push s x)
+  (state (cons x (state-stack s)) (state-image s)))
+
+; Skidanje operacije sa stacka
+(define (pop s)
+  (if (empty? (state-stack s))
+      (error "Stack underflow")
+      (state (cdr (state-stack s)) (state-image s))))
+
+; Vraćanje vrha stacka
+(define (top s)
+  (if (empty? (state-stack s))
+      (error "Stack underflow")
+      (car (state-stack s))))
+
+; Definicija dostupnih komandi
+(define (interpret-command cmd s)
+  (match cmd
+    [(? number?) (push s cmd)]
+    ['draw-rect
+     (let* ([h (top s)]
+            [s1 (pop s)]
+            [w (top s1)]
+            [s2 (pop s1)]
+            [y (top s2)]
+            [s3 (pop s2)]
+            [x (top s3)]
+            [s4 (pop s3)])
+       (state (state-stack s4)
+              (place-image (rectangle w h 'solid 'black) x y (state-image s4))))]))
+
+; Pokretanje interpretera
+(define (run-commands commands)
+  (define (loop cmds state)
+    (if (null? cmds)
+        state
+        (loop (cdr cmds) (interpret-command (car cmds) state))))
+  (loop commands initial-state))
+
+; Generiranje PNG slike iz stack-based komandi
+(define (generate-image commands filename)
+  (define final-state (run-commands commands))
+  (save-image (state-image final-state) filename))
+
+; Kreiranje komandi za crtanje pravokutnika
+(define commands (flatten (for*/list ([i (in-range 50 500 50)] [j (in-range 50 500 50)]) (list i j 40 40 'draw-rect))))
+
+; Generiranje slike
+(generate-image commands "pattern.png")
